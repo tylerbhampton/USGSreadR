@@ -207,11 +207,11 @@ retrieveQdatayear=function(site,Qdir,runclimate=TRUE,climatepath){
 
   basininfo=EGRET::readNWISInfo(siteNumber = site,parameterCd = "00060",interactive = FALSE)
   basin_area_m2=basininfo$drainSqKm*(1000^2)
-  Qdata=readQfile(site)
+  Qdata=readQfile(site,Qdir)
   if(!("try-error" %in% class(Qdata) | "try-error" %in% Qdata)){
 
     years=sort(plyr::count(Qdata$WY)$x[plyr::count(Qdata$WY)$freq>350])
-    if(length(years)>=5 & sum(1982:2017 %in% years)>0){
+    if(length(years)>=5 & sum(1982:2019 %in% years)>0){
       Qdata_year=data.frame(WYear=years)
       Qdata_year$FlowYear_m3yr=NA
       Qdata_year$FlowYear_mmyr=NA
@@ -240,10 +240,10 @@ retrieveQdatayear=function(site,Qdir,runclimate=TRUE,climatepath){
           writeLines("FILE NOT FOUND")
         }
 
-        yearsmatch=Qdata_year$WYear[Qdata_year$WYear %in% 1982:2017]
-        Qdata_year$precip_mm[Qdata_year$WYear %in% yearsmatch]=round(climatedata_site$precip_mm[1982:2017 %in% yearsmatch],2)
+        yearsmatch=Qdata_year$WYear[Qdata_year$WYear %in% 1982:2019]
+        Qdata_year$precip_mm[Qdata_year$WYear %in% yearsmatch]=round(climatedata_site$precip_mm[1982:2019 %in% yearsmatch],2)
         Qdata_year$pctQP=round(Qdata_year$FlowYear_mmyr/Qdata_year$precip_mm,4)
-        Qdata_year$pet_mm[Qdata_year$WYear %in% yearsmatch]=round(climatedata_site$pet_mm[1982:2017 %in% yearsmatch],2)
+        Qdata_year$pet_mm[Qdata_year$WYear %in% yearsmatch]=round(climatedata_site$pet_mm[1982:2019 %in% yearsmatch],2)
         Qdata_year$AET.P=(Qdata_year$precip_mm-Qdata_year$FlowYear_mmyr)/Qdata_year$precip_mm
         Qdata_year$PET.P=Qdata_year$pet_mm/Qdata_year$precip_mm
 
@@ -257,7 +257,7 @@ retrieveQdatayear=function(site,Qdir,runclimate=TRUE,climatepath){
         Qdata_year$centroidflowdate[row]=round(Qdata$WYdec[Qdata$WY==Y][which(sapply(1:sum(Qdata$WY==Y),function(i){sum(Qdata$Flow_L.d[Qdata$WY==Y][1:i])})>sum(Qdata$Flow_L.d[Qdata$WY==Y])/2)[1]]-Y,3)
       }
       write.csv(x = Qdata_year,
-                file = paste0(Qdir,"DischargeAnnualSummaries/","DischargeSummary_",site,".csv"),
+                file = file.path(Qdir,"DischargeAnnualSummaries",paste0("DischargeSummary_",site,".csv")),
                 row.names = FALSE)
     }
   }
