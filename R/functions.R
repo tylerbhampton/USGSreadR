@@ -204,7 +204,7 @@ readQfile_year=function(site,Qdir,retrieve=TRUE){
 #' @export
 
 retrieveQdatayear=function(site,Qdir,runclimate=TRUE,climatepath){
-
+  if(!file.exists(file.path(Qdir,"DischargeAnnualSummaries"))){dir.create(file.path(Qdir,"DischargeAnnualSummaries"))}
   basininfo=EGRET::readNWISInfo(siteNumber = site,parameterCd = "00060",interactive = FALSE)
   basin_area_m2=basininfo$drainSqKm*(1000^2)
   Qdata=readQfile(site,Qdir)
@@ -263,3 +263,89 @@ retrieveQdatayear=function(site,Qdir,runclimate=TRUE,climatepath){
   }
 
 }
+
+
+#' @title retrieveQdatamonth
+#' @return Calculates Monthly Summed USGS Flow Data and Downloads Data If Needed
+#' @param site 8-digit USGS site number
+#' @param Qdir file directory where Q data is stored, inherited from readQfile_year
+#' @md
+#' @export
+
+retrieveQdatamonth=function (site, Qdir,WY=TRUE) {
+  if(!file.exists(file.path(Qdir,"DischargeMonthlySummaries"))){dir.create(file.path(Qdir,"DischargeMonthlySummaries"))}
+  basininfo = EGRET::readNWISInfo(siteNumber = site, parameterCd = "00060", 
+                                  interactive = FALSE)
+  basin_area_m2 = basininfo$drainSqKm * (1000^2)
+  Qdata = readQfile(site, Qdir)
+  if(!WY){
+    Qdata$Year=as.POSIXlt(Qdata$Date)$year+1900
+    Qdata$Mo=as.POSIXlt(Qdata$Date)$mo+1
+    Qdata=subset(Qdata,select=-c(WY,WYmo,WYdec))
+  }
+  
+  if (!("try-error" %in% class(Qdata) | "try-error" %in% 
+        Qdata)) {
+    years = sort(plyr::count(Qdata$Year)$x[plyr::count(Qdata$Year)$freq > 
+                                             350])
+    if (length(years) >= 5 & sum(1982:2019 %in% years) > 
+        0) {
+      Qdata_ymo = do.call("rbind",lapply(years,function(year){
+        months_for_year <- unique(Qdata$Mo[Qdata$Year==year])
+        year_data_frame <- data.frame(Year=year,Mo=months_for_year)
+        return(year_data_frame)}))
+      Qdata_ymo$YMo=sapply(1:nrow(Qdata_ymo),function(i){
+        month=Qdata_ymo$Mo[i]
+        month=as.character(ifelse(nchar(as.character(month))==1,paste0("0",month),month))
+        return(paste0(Qdata_ymo$Year[i],month))
+      })
+      Qdata_ymo$FlowMonth_m3 = NA
+      Qdata_ymo$FlowMonth_mm = NA
+      Qdata_ymo$precip_mm = NA
+      Qdata_ymo$pet_mm = NA
+      Qdata_ymo$W2pct = NA
+      Qdata_ymo$RBi = NA
+      Qdata_ymo$pctQP = NA
+      
+      for(i in 1:nrow(Qdata_ymo)){
+        y=Qdata_ymo$Year[i]
+        m=Qdata_ymo$Mo[i]
+        monthflow = Qdata$Flow_L.d[Qdata$Mo == m & Qdata$Year==y]
+        n_days = length(monthflow)
+        Qdata_ymo$FlowMonth_m3[i] = (mean(monthflow, na.rm = TRUE) * n_days * (1/1000))
+        Qdata_ymo$FlowMonth_mm[i] = round(((mean(monthflow, na.rm = TRUE) * n_days * (1/1000))/basin_area_m2) * 1000, 2)
+        Qdata_ymo$W2pct[i] = round(sum(sort(monthflow, decreasing = TRUE)[1:floor(length(monthflow) * 0.02)], na.rm = TRUE)/sum(monthflow, na.rm = TRUE), 4)
+        Qdata_ymo$RBi[i] = round(sum(abs(monthflow[2:length(monthflow)] - monthflow[1:(length(monthflow) - 1)]))/sum(monthflow[2:length(monthflow)]), 4)
+      }
+      
+      write.csv(x = Qdata_ymo, file = file.path(Qdir, 
+                                                "DischargeMonthlySummaries", paste0("DischargeSummary_", 
+                                                                                    site, ".csv")), row.names = FALSE)
+    }
+  }
+}
+
+
+#' @title readQfile_month
+#' @return Finds an annually summed stored USGS Flow file or Downloads the Data if Not Found
+#' @param site 8-digit USGS site number
+#' @param Qdir file directory where Q data is stored
+#' @md
+#' @export
+
+readQfile_month=function(site,Qdir,retrieve=TRUE){
+  file=paste0("DischargeSummary_",site,".csv")
+  QYfileexists=(file %in% list.files(path = file.path(Qdir,"DischargeMonthlySummaries")))
+  if(!QYfileexists){
+    if(retrieve){
+      retrieveQdatamonth(site,Qdir=Qdir)
+    }else{
+      writeLines("FILE NOT FOUND")
+      Qdata_month="try-error"
+    }
+  }
+  Qdata_month=try(read.csv(file = file.path(Qdir,"DischargeMonthlySummaries",file),stringsAsFactors = FALSE))
+  if("try-error" %in% class(Qdata_month)){Qdata_month="try-error"}
+  return(Qdata_month)
+}
+
